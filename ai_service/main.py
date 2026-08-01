@@ -251,10 +251,9 @@ def get_single_simulation(sim_id: str, db: Session = Depends(get_db)):
     }
 
 @app.post("/history/simulations")
-def create_simulation_record(payload: SimulationCreateSchema, db: Session = Depends(get_db)):
-    sim_id = payload.id or f"sim-{int(datetime.datetime.now().timestamp() * 1000)}"
-    sim = models.SimulationModel(
-        id=sim_id,
+def store_simulation(payload: SimulationSchema, db: Session = Depends(get_db)):
+    sim_model = models.SimulationModel(
+        id=payload.id,
         name=payload.name,
         test_type=payload.test_type,
         target_url=payload.target_url,
@@ -264,12 +263,10 @@ def create_simulation_record(payload: SimulationCreateSchema, db: Session = Depe
         duration_seconds=payload.duration_seconds,
         traffic_pattern=payload.traffic_pattern,
         status=payload.status,
-        created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
     )
-    db.add(sim)
+    db.merge(sim_model)
     db.commit()
-    db.refresh(sim)
-    return {"message": "Simulation configuration stored in PostgreSQL", "id": sim.id}
+    return {"message": "Simulation configuration stored in PostgreSQL", "id": payload.id}
 
 @app.delete("/history/simulations/{sim_id}")
 def delete_simulation_record(sim_id: str, db: Session = Depends(get_db)):
@@ -280,8 +277,8 @@ def delete_simulation_record(sim_id: str, db: Session = Depends(get_db)):
     return {"message": "Simulation deleted from PostgreSQL", "id": sim_id}
 
 @app.post("/history/results")
-def store_simulation_result(payload: SimulationResultCreateSchema, db: Session = Depends(get_db)):
-    res_id = f"res-{int(datetime.datetime.now().timestamp() * 1000)}"
+def store_simulation_result(payload: SimulationResultSchema, db: Session = Depends(get_db)):
+    res_id = f"res-{payload.simulation_id}"
     result = models.SimulationResultModel(
         id=res_id,
         simulation_id=payload.simulation_id,
@@ -296,12 +293,11 @@ def store_simulation_result(payload: SimulationResultCreateSchema, db: Session =
         success_requests=payload.success_requests,
         failed_requests=payload.failed_requests,
     )
-    # Update simulation status to COMPLETED
     sim = db.query(models.SimulationModel).filter(models.SimulationModel.id == payload.simulation_id).first()
     if sim:
         sim.status = "COMPLETED"
         sim.stopped_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-    db.add(result)
+    db.merge(result)
     db.commit()
     return {"message": "Simulation execution results stored in PostgreSQL", "id": res_id}
