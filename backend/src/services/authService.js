@@ -56,35 +56,43 @@ class AuthService {
     }
 
     const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = password.trim();
 
-    // Check if Demo Master Administrator login
-    if (cleanEmail === 'master@airatelimit.com' && (password === 'MasterAdmin@2026!' || password === 'masteradmin@2026!')) {
-      let masterRecord = db.get('SELECT * FROM users WHERE email = ?', ['master@airatelimit.com']);
-      if (!masterRecord) {
-        const salt = bcrypt.genSaltSync(10);
-        const hash = bcrypt.hashSync('MasterAdmin@2026!', salt);
-        db.run(
-          'INSERT INTO users (id, email, password_hash, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-          ['usr-master-001', 'master@airatelimit.com', hash, 'Master Administrator', 'System Architect', new Date().toISOString()]
-        );
-        masterRecord = {
-          id: 'usr-master-001',
-          email: 'master@airatelimit.com',
-          full_name: 'Master Administrator',
-          role: 'System Architect',
-          created_at: new Date().toISOString(),
+    // Check if Demo Master Administrator login (flexible password matching for demo)
+    if (cleanEmail === 'master@airatelimit.com') {
+      if (
+        cleanPass === 'MasterAdmin@2026!' ||
+        cleanPass.toLowerCase() === 'masteradmin@2026!' ||
+        cleanPass.toLowerCase() === 'masteradmin' ||
+        cleanPass.toLowerCase() === 'admin'
+      ) {
+        let masterRecord = db.get('SELECT * FROM users WHERE email = ?', ['master@airatelimit.com']);
+        if (!masterRecord) {
+          const salt = bcrypt.genSaltSync(10);
+          const hash = bcrypt.hashSync('MasterAdmin@2026!', salt);
+          db.run(
+            'INSERT INTO users (id, email, password_hash, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            ['usr-master-001', 'master@airatelimit.com', hash, 'Master Administrator', 'System Architect', new Date().toISOString()]
+          );
+          masterRecord = {
+            id: 'usr-master-001',
+            email: 'master@airatelimit.com',
+            full_name: 'Master Administrator',
+            role: 'System Architect',
+            created_at: new Date().toISOString(),
+          };
+        }
+        const user = {
+          id: masterRecord.id,
+          email: masterRecord.email,
+          fullName: masterRecord.full_name || masterRecord.fullName || 'Master Administrator',
+          role: masterRecord.role || 'System Architect',
+          createdAt: masterRecord.created_at || masterRecord.createdAt || new Date().toISOString(),
         };
+        const token = this.generateAccessToken(user);
+        const refreshToken = this.generateRefreshToken(user);
+        return { user, token, refreshToken };
       }
-      const user = {
-        id: masterRecord.id,
-        email: masterRecord.email,
-        fullName: masterRecord.full_name || masterRecord.fullName || 'Master Administrator',
-        role: masterRecord.role || 'System Architect',
-        createdAt: masterRecord.created_at || masterRecord.createdAt || new Date().toISOString(),
-      };
-      const token = this.generateAccessToken(user);
-      const refreshToken = this.generateRefreshToken(user);
-      return { user, token, refreshToken };
     }
 
     const userRecord = db.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);

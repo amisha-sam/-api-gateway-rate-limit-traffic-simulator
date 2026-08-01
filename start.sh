@@ -19,13 +19,14 @@ cd /Users/prathap/Documents/hack/backend
 node server.cjs > /dev/null 2>&1 &
 
 # 3. Start React Frontend (Port 5173)
-echo "🎨 Starting React Frontend UI on http://127.0.0.1:5173..."
+echo "🎨 Starting React Frontend UI on http://localhost:5173..."
 cd /Users/prathap/Documents/hack/frontend
-npx vite --host 127.0.0.1 --port 5173 > /dev/null 2>&1 &
+npx vite --host 0.0.0.0 --port 5173 > /dev/null 2>&1 &
 
 echo "===================================================="
 echo "✅ All 3 services are online!"
-echo "🌐 Open App: http://127.0.0.1:5173"
+echo "🌐 Open React Web App: http://localhost:5173"
+echo "⚙️ Backend API: http://localhost:8080"
 echo "===================================================="
 
 wait
