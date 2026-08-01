@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Activity,
   WifiOff,
@@ -10,16 +10,50 @@ import {
   CheckCircle2,
   XCircle,
   RefreshCw,
+  TrendingUp,
 } from 'lucide-react';
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useLiveTelemetry } from '../hooks/useLiveTelemetry';
 import { Card } from '../components/ui/Card';
 import { Badge } from '../components/ui/Badge';
 import { EmptyState } from '../components/common/EmptyState';
 
+interface TelemetryPoint {
+  time: string;
+  latencyMs: number;
+  p95LatencyMs: number;
+  p99LatencyMs: number;
+  throughputRps: number;
+  cpuUsagePercent: number;
+}
+
 export const LiveTelemetryPage: React.FC = () => {
   const { telemetry, status, reconnect } = useLiveTelemetry(
     'ws://localhost:8080/api/telemetry/ws'
   );
+
+  const [history, setHistory] = useState<TelemetryPoint[]>([]);
+
+  // Accumulate live streaming data points
+  useEffect(() => {
+    if (telemetry) {
+      const now = new Date().toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+      setHistory((prev) => {
+        const next = [
+          ...prev,
+          {
+            time: now,
+            latencyMs: telemetry.latencyMs || 0,
+            p95LatencyMs: telemetry.p95LatencyMs || 0,
+            p99LatencyMs: telemetry.p99LatencyMs || 0,
+            throughputRps: telemetry.throughputRps || 0,
+            cpuUsagePercent: telemetry.cpuUsagePercent || 0,
+          },
+        ];
+        return next.slice(-20); // Keep last 20 real-time points
+      });
+    }
+  }, [telemetry]);
 
   const isConnected = status === 'CONNECTED';
 
@@ -77,7 +111,7 @@ export const LiveTelemetryPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Live Telemetry</h1>
+            <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Live Telemetry & Real-Time Graphics</h1>
             <Badge variant={isConnected ? 'emerald' : 'amber'}>
               {isConnected ? 'Stream Connected' : status}
             </Badge>
@@ -115,6 +149,51 @@ export const LiveTelemetryPage: React.FC = () => {
             Reconnect
           </button>
         </div>
+      )}
+
+      {/* Real-Time Live Streaming Chart Graphic */}
+      {isConnected && history.length > 0 && (
+        <Card className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <h3 className="text-xs font-bold text-zinc-100">Live Streaming Latency & Tail Spikes (Real-Time WebSocket)</h3>
+            </div>
+            <div className="flex items-center gap-3 text-[11px]">
+              <span className="flex items-center gap-1 text-blue-400">
+                <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" /> Avg Latency
+              </span>
+              <span className="flex items-center gap-1 text-purple-400">
+                <span className="w-2 h-2 rounded-full bg-purple-400 inline-block" /> P99 Tail Latency
+              </span>
+            </div>
+          </div>
+
+          <div className="h-56 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={history}>
+                <defs>
+                  <linearGradient id="liveAvg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#60a5fa" stopOpacity={0.0} />
+                  </linearGradient>
+                  <linearGradient id="liveP99" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#c084fc" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#c084fc" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <XAxis dataKey="time" stroke="#71717a" fontSize={10} />
+                <YAxis stroke="#71717a" fontSize={10} unit="ms" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#09090b', borderColor: '#27272a', borderRadius: '8px', fontSize: '11px', color: '#f4f4f5' }}
+                />
+                <Area type="monotone" dataKey="latencyMs" name="Avg Latency (ms)" stroke="#60a5fa" fillOpacity={1} fill="url(#liveAvg)" />
+                <Area type="monotone" dataKey="p99LatencyMs" name="P99 Latency (ms)" stroke="#c084fc" fillOpacity={1} fill="url(#liveP99)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
       )}
 
       {/* Cards Grid */}
