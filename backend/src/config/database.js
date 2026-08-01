@@ -178,9 +178,12 @@ module.exports = {
     }
     if (sqlUpper.includes('FROM USERS')) {
       if (params[0]) {
-        return inMemoryStore.users.find(u => u.email === params[0] || u.id === params[0]) || inMemoryStore.users[0];
+        const found = inMemoryStore.users.find(
+          u => u.email.toLowerCase() === String(params[0]).toLowerCase() || u.id === params[0]
+        );
+        return found || null;
       }
-      return inMemoryStore.users[0];
+      return inMemoryStore.users[0] || null;
     }
     if (sqlUpper.includes('FROM RECOMMENDATIONS')) return inMemoryStore.recommendations[0] || null;
     if (sqlUpper.includes('FROM TELEMETRY')) return inMemoryStore.telemetry[0] || null;
@@ -192,8 +195,14 @@ module.exports = {
       return db.prepare(sql).run(params);
     }
     const sqlUpper = sql.toUpperCase();
-    if (sqlUpper.includes('INSERT INTO USERS')) {
-      inMemoryStore.users.push({ id: params[0], email: params[1], password_hash: params[2], full_name: params[3], role: params[4], created_at: params[5] });
+    if (sqlUpper.includes('INSERT INTO USERS') || sqlUpper.includes('INSERT OR REPLACE INTO USERS')) {
+      const existingIdx = inMemoryStore.users.findIndex(u => u.id === params[0] || u.email === params[1]);
+      const userObj = { id: params[0], email: params[1], password_hash: params[2], full_name: params[3], role: params[4], created_at: params[5] };
+      if (existingIdx >= 0) {
+        inMemoryStore.users[existingIdx] = userObj;
+      } else {
+        inMemoryStore.users.push(userObj);
+      }
     } else if (sqlUpper.includes('INSERT INTO SIMULATIONS')) {
       inMemoryStore.simulations.unshift({ id: params[0], user_id: params[1], name: params[2], test_type: params[3], target_url: params[4], http_method: params[5], concurrent_users: params[6], requests_per_second: params[7], duration_seconds: params[8], traffic_pattern: params[9], status: params[10], created_at: params[11] });
     } else if (sqlUpper.includes('INSERT INTO RECOMMENDATIONS')) {

@@ -16,9 +16,10 @@ class AuthService {
   async register({ email, password, fullName }) {
     // Validate inputs with Zod
     const validated = registerSchema.parse({ email, password, fullName });
+    const cleanEmail = validated.email.toLowerCase();
 
     // Check duplicate email
-    const existing = db.get('SELECT * FROM users WHERE email = ?', [validated.email.toLowerCase()]);
+    const existing = db.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
     if (existing) {
       throw new Error('An account with this email address already exists');
     }
@@ -32,12 +33,12 @@ class AuthService {
 
     db.run(
       'INSERT INTO users (id, email, password_hash, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [userId, validated.email.toLowerCase(), passwordHash, validated.fullName, 'Engineer', createdAt]
+      [userId, cleanEmail, passwordHash, validated.fullName, 'Engineer', createdAt]
     );
 
     const user = {
       id: userId,
-      email: validated.email.toLowerCase(),
+      email: cleanEmail,
       fullName: validated.fullName,
       role: 'Engineer',
       createdAt,
@@ -55,25 +56,54 @@ class AuthService {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const userRecord = db.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
 
-    // Strictly check if user exists
-    if (!userRecord) {
-      throw new Error('Account not found. Please register a new account or use the Demo Master Account.');
+    // Check if Demo Master Administrator login
+    if (cleanEmail === 'master@airatelimit.com' && (password === 'MasterAdmin@2026!' || password === 'masteradmin@2026!')) {
+      let masterRecord = db.get('SELECT * FROM users WHERE email = ?', ['master@airatelimit.com']);
+      if (!masterRecord) {
+        const salt = bcrypt.genSaltSync(10);
+        const hash = bcrypt.hashSync('MasterAdmin@2026!', salt);
+        db.run(
+          'INSERT INTO users (id, email, password_hash, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+          ['usr-master-001', 'master@airatelimit.com', hash, 'Master Administrator', 'System Architect', new Date().toISOString()]
+        );
+        masterRecord = {
+          id: 'usr-master-001',
+          email: 'master@airatelimit.com',
+          full_name: 'Master Administrator',
+          role: 'System Architect',
+          created_at: new Date().toISOString(),
+        };
+      }
+      const user = {
+        id: masterRecord.id,
+        email: masterRecord.email,
+        fullName: masterRecord.full_name || masterRecord.fullName || 'Master Administrator',
+        role: masterRecord.role || 'System Architect',
+        createdAt: masterRecord.created_at || masterRecord.createdAt || new Date().toISOString(),
+      };
+      const token = this.generateAccessToken(user);
+      const refreshToken = this.generateRefreshToken(user);
+      return { user, token, refreshToken };
     }
 
-    // Strictly verify password using bcrypt
+    const userRecord = db.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+
+    if (!userRecord) {
+      throw new Error('Account not found. Please register a new account or check your email.');
+    }
+
     const isMatch = await bcrypt.compare(password, userRecord.password_hash);
-    if (!isMatch && !(cleanEmail === 'master@airatelimit.com' && password === 'MasterAdmin@2026!')) {
+    if (!isMatch) {
       throw new Error('Invalid email or password. Please check your credentials.');
     }
 
     const user = {
       id: userRecord.id,
       email: userRecord.email,
-      fullName: userRecord.full_name,
+      fullName: userRecord.full_name || userRecord.fullName,
       role: userRecord.role,
-      createdAt: userRecord.created_at,
+      createdAt: userRecord.created_at || userRecord.createdAt,
     };
 
     const token = this.generateAccessToken(user);
