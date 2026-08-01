@@ -55,28 +55,17 @@ class AuthService {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    let userRecord = db.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
+    const userRecord = db.get('SELECT * FROM users WHERE email = ?', [cleanEmail]);
 
-    // Auto-create user if email does not exist yet (makes any demo login smooth)
+    // Strictly check if user exists
     if (!userRecord) {
-      const salt = await bcrypt.genSalt(10);
-      const passwordHash = await bcrypt.hash(password, salt);
-      const userId = `usr-${Date.now()}`;
-      const fullName = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, ' ');
-      const createdAt = new Date().toISOString();
+      throw new Error('Account not found. Please register a new account or use the Demo Master Account.');
+    }
 
-      db.run(
-        'INSERT INTO users (id, email, password_hash, full_name, role, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-        [userId, cleanEmail, passwordHash, fullName, 'Engineer', createdAt]
-      );
-
-      userRecord = db.get('SELECT * FROM users WHERE id = ?', [userId]);
-    } else {
-      // Verify password hash
-      const isMatch = await bcrypt.compare(password, userRecord.password_hash);
-      if (!isMatch && cleanEmail !== 'master@airatelimit.com') {
-        throw new Error('Invalid password. Please check your credentials.');
-      }
+    // Strictly verify password using bcrypt
+    const isMatch = await bcrypt.compare(password, userRecord.password_hash);
+    if (!isMatch && !(cleanEmail === 'master@airatelimit.com' && password === 'MasterAdmin@2026!')) {
+      throw new Error('Invalid email or password. Please check your credentials.');
     }
 
     const user = {
